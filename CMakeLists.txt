@@ -14,12 +14,18 @@ FetchContent_Declare(SDL3
 )
 FetchContent_MakeAvailable(SDL3)
 
+FetchContent_Declare(cglm
+    GIT_REPOSITORY https://github.com/recp/cglm
+    GIT_TAG v0.9.6
+)
+FetchContent_MakeAvailable(cglm)
+
 file(GLOB_RECURSE SOURCES src/*.c src/*.h)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wpedantic -g)
 target_include_directories(${PROJECT_NAME} PRIVATE src/ ${PROJECT_SOURCE_DIR}/lib/shadercross/include)
-target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 ${PROJECT_SOURCE_DIR}/lib/shadercross/libSDL3_shadercross.a)
+target_link_libraries(${PROJECT_NAME} PRIVATE cglm SDL3::SDL3 ${PROJECT_SOURCE_DIR}/lib/shadercross/libSDL3_shadercross.a)
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets)

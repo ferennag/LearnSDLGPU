@@ -1,5 +1,6 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <cglm/cglm.h>
 #include <stddef.h>
 
 typedef struct Vertex {
@@ -7,8 +8,15 @@ typedef struct Vertex {
     float normal[3];
 } Vertex;
 
+// TODO: projection matrix should not be part of the frame UBO, no need to send it to the GPU every frame
+typedef struct FrameUbo {
+    mat4 projection;
+    mat4 view;
+    mat4 model;
+} FrameUbo;
+
 static Vertex vertices[] = {
-    // Front face
+    // Front face (+Z)
     {{-0.5f, -0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
     {{0.5f, -0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
     {{-0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
@@ -16,6 +24,51 @@ static Vertex vertices[] = {
     {{-0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
     {{0.5f, -0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
     {{0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    //
+    // Back face (-Z)
+    {{0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}},
+    {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}},
+    {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}},
+
+    {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}},
+    {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}},
+    {{-0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}},
+
+    // Left face (-X)
+    {{-0.5f, -0.5f, -0.5f}, {-1.0f, 0.0f, 0.0f}},
+    {{-0.5f, -0.5f, 0.5f}, {-1.0f, 0.0f, 0.0f}},
+    {{-0.5f, 0.5f, -0.5f}, {-1.0f, 0.0f, 0.0f}},
+
+    {{-0.5f, 0.5f, -0.5f}, {-1.0f, 0.0f, 0.0f}},
+    {{-0.5f, -0.5f, 0.5f}, {-1.0f, 0.0f, 0.0f}},
+    {{-0.5f, 0.5f, 0.5f}, {-1.0f, 0.0f, 0.0f}},
+
+    // Right face (+X)
+    {{0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, 0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}},
+
+    {{0.5f, 0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, 0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+
+    // Top face (+Y)
+    {{-0.5f, 0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{-0.5f, 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+
+    {{-0.5f, 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+
+    // Bottom face (-Y)
+    {{-0.5f, -0.5f, -0.5f}, {0.0f, -1.0f, 0.0f}},
+    {{0.5f, -0.5f, -0.5f}, {0.0f, -1.0f, 0.0f}},
+    {{-0.5f, -0.5f, 0.5f}, {0.0f, -1.0f, 0.0f}},
+
+    {{-0.5f, -0.5f, 0.5f}, {0.0f, -1.0f, 0.0f}},
+    {{0.5f, -0.5f, -0.5f}, {0.0f, -1.0f, 0.0f}},
+    {{0.5f, -0.5f, 0.5f}, {0.0f, -1.0f, 0.0f}},
 };
 
 SDL_GPUShader *ShaderLoad(SDL_GPUDevice *device,
@@ -121,7 +174,7 @@ int main(int argc, char **argv) {
         return -4;
     }
 
-    SDL_GPUShader *basicVertexShader = ShaderLoad(device, "basic.vert", 0, 0, 0, 0);
+    SDL_GPUShader *basicVertexShader = ShaderLoad(device, "basic.vert", 0, 0, 1, 0);
     SDL_GPUShader *basicFragmentShader = ShaderLoad(device, "basic.frag", 0, 0, 0, 0);
     if (!basicVertexShader || !basicFragmentShader) {
         return -5;
@@ -235,7 +288,17 @@ int main(int argc, char **argv) {
 
     SDL_SetGPUSwapchainParameters(device, window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_VSYNC);
 
+    FrameUbo frameUbo = {};
+    int windowWidth, windowHeight;
+    SDL_GetWindowSize(window, &windowWidth, &windowHeight);
+    glm_perspective(glm_rad(75.0f), (float)windowWidth / (float)windowHeight, 0.1f, 1000.0f, frameUbo.projection);
+    glm_mat4_identity(frameUbo.view);
+    glm_mat4_identity(frameUbo.model);
+    glm_lookat((float[3]){0.0f, 0.0f, 5.0f}, (float[3]){0.0f, 0.0f, 0.0f}, (float[3]){0.0f, 1.0f, 0.0f}, frameUbo.view);
+
     bool running = true;
+    Uint64 previousFrame = SDL_GetTicks();
+
     while (running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -253,14 +316,30 @@ int main(int argc, char **argv) {
                     }
                     break;
                 }
+                case SDL_EVENT_WINDOW_RESIZED: {
+                    glm_perspective(glm_rad(75.0f),
+                                    (float)event.window.data1 / (float)event.window.data2,
+                                    0.1f,
+                                    1000.0f,
+                                    frameUbo.projection);
+                    break;
+                }
             }
         }
+
+        Uint64 currentFrame = SDL_GetTicks();
+        float delta = (currentFrame - previousFrame) / 1000.0f;
+        previousFrame = currentFrame;
 
         SDL_GPUCommandBuffer *commandBuffer = SDL_AcquireGPUCommandBuffer(device);
         if (!commandBuffer) {
             SDL_Log("Failed to acquire command buffer: %s", SDL_GetError());
             break;
         }
+
+        // Update uniforms
+        glm_rotate(frameUbo.model, glm_rad(100.0f * delta), (float[3]){1.0f, 1.0f, 0.0f});
+        SDL_PushGPUVertexUniformData(commandBuffer, 0, &frameUbo, sizeof(frameUbo));
 
         SDL_GPUTexture *swapchainTexture = NULL;
         if (SDL_WaitAndAcquireGPUSwapchainTexture(commandBuffer, window, &swapchainTexture, NULL, NULL)) {
@@ -273,7 +352,7 @@ int main(int argc, char **argv) {
             SDL_GPURenderPass *pass = SDL_BeginGPURenderPass(commandBuffer, &color, 1, NULL);
             SDL_BindGPUGraphicsPipeline(pass, pipeline);
             SDL_BindGPUVertexBuffers(pass, 0, &(SDL_GPUBufferBinding){.buffer = vertexBuffer, .offset = 0}, 1);
-            SDL_DrawGPUPrimitives(pass, 6, 1, 0, 0);
+            SDL_DrawGPUPrimitives(pass, (sizeof(vertices) / sizeof(Vertex)), 1, 0, 0);
             SDL_EndGPURenderPass(pass);
         }
         SDL_SubmitGPUCommandBuffer(commandBuffer);
