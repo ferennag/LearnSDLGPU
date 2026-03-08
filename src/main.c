@@ -3,6 +3,9 @@
 #include <cglm/cglm.h>
 #include <stddef.h>
 
+#include "core/shader.h"
+#include "core/util.h"
+
 typedef struct Vertex {
     float position[3];
     float normal[3];
@@ -71,82 +74,6 @@ static Vertex vertices[] = {
     {{0.5f, -0.5f, 0.5f}, {0.0f, -1.0f, 0.0f}},
 };
 
-SDL_GPUShader *ShaderLoad(SDL_GPUDevice *device,
-                          const char *name,
-                          int numSamplers,
-                          int numStorageBuffers,
-                          int numUniformBuffers,
-                          int numStorageTextures) {
-    SDL_GPUShaderFormat formats = SDL_GetGPUShaderFormats(device);
-    SDL_GPUShaderFormat selectedFormat = SDL_GPU_SHADERFORMAT_INVALID;
-    SDL_GPUShaderStage stage = SDL_GPU_SHADERSTAGE_VERTEX;
-    const char *entryPoint = "main";
-
-    char fullPath[256] = {0};
-
-    if (SDL_strstr(name, ".vert")) {
-        stage = SDL_GPU_SHADERSTAGE_VERTEX;
-    } else if (SDL_strstr(name, ".frag")) {
-        stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
-    } else {
-        SDL_Log("Unknown shader stage: %s", name);
-        return NULL;
-    }
-
-    if (formats & SDL_GPU_SHADERFORMAT_MSL) {
-        selectedFormat = SDL_GPU_SHADERFORMAT_MSL;
-        entryPoint = "main0";
-        SDL_snprintf(fullPath, 256, "assets/shaders/compiled/msl/%s.msl", name);
-    }
-
-    if (selectedFormat == SDL_GPU_SHADERFORMAT_INVALID) {
-        return NULL;
-    }
-
-    size_t codeSize = 0;
-    uint8_t *code = SDL_LoadFile(fullPath, &codeSize);
-
-    SDL_GPUShaderCreateInfo shaderCreateInfo = {};
-    shaderCreateInfo.entrypoint = entryPoint;
-    shaderCreateInfo.code = code;
-    shaderCreateInfo.code_size = codeSize;
-    shaderCreateInfo.format = selectedFormat;
-    shaderCreateInfo.stage = stage;
-    shaderCreateInfo.num_samplers = numSamplers;
-    shaderCreateInfo.num_storage_buffers = numStorageBuffers;
-    shaderCreateInfo.num_storage_textures = numStorageTextures;
-    shaderCreateInfo.num_uniform_buffers = numUniformBuffers;
-
-    SDL_GPUShader *shader = SDL_CreateGPUShader(device, &shaderCreateInfo);
-    SDL_free(code);
-
-    if (shader == NULL) {
-        SDL_Log("Failed to load shader: %s - %s", name, SDL_GetError());
-        return NULL;
-    }
-
-    return shader;
-}
-
-SDL_GPUSampleCount GetHighestSupportedSampleCount(SDL_GPUDevice *device, SDL_Window *window) {
-    SDL_GPUTextureFormat format = SDL_GetGPUSwapchainTextureFormat(device, window);
-    SDL_GPUSampleCount requestedSampleCounts[] = {
-        SDL_GPU_SAMPLECOUNT_8,
-        SDL_GPU_SAMPLECOUNT_4,
-        SDL_GPU_SAMPLECOUNT_2,
-        SDL_GPU_SAMPLECOUNT_1,
-    };
-
-    for (int i = 0; i < (sizeof(requestedSampleCounts) / sizeof(requestedSampleCounts[0])); ++i) {
-        if (SDL_GPUTextureSupportsSampleCount(device, format, requestedSampleCounts[i])) {
-            SDL_Log("Highest supported sample count (MSAA) = %dx", 2 << requestedSampleCounts[i]);
-            return requestedSampleCounts[i];
-        }
-    }
-
-    return 0;
-}
-
 int main(int argc, char **argv) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_Log("Error initializing SDL: %s", SDL_GetError());
@@ -174,8 +101,8 @@ int main(int argc, char **argv) {
         return -4;
     }
 
-    SDL_GPUShader *basicVertexShader = ShaderLoad(device, "basic.vert", 0, 0, 1, 0);
-    SDL_GPUShader *basicFragmentShader = ShaderLoad(device, "basic.frag", 0, 0, 0, 0);
+    SDL_GPUShader *basicVertexShader = Shader_Load(device, "basic.vert", 0, 0, 1, 0);
+    SDL_GPUShader *basicFragmentShader = Shader_Load(device, "basic.frag", 0, 0, 0, 0);
     if (!basicVertexShader || !basicFragmentShader) {
         return -5;
     }
@@ -294,7 +221,7 @@ int main(int argc, char **argv) {
     glm_perspective(glm_rad(75.0f), (float)windowWidth / (float)windowHeight, 0.1f, 1000.0f, frameUbo.projection);
     glm_mat4_identity(frameUbo.view);
     glm_mat4_identity(frameUbo.model);
-    glm_lookat((float[3]){0.0f, 0.0f, 5.0f}, (float[3]){0.0f, 0.0f, 0.0f}, (float[3]){0.0f, 1.0f, 0.0f}, frameUbo.view);
+    glm_lookat((vec3){0.0f, 0.0f, 5.0f}, (vec3){0.0f, 0.0f, 0.0f}, (vec3){0.0f, 1.0f, 0.0f}, frameUbo.view);
 
     bool running = true;
     Uint64 previousFrame = SDL_GetTicks();
@@ -338,7 +265,7 @@ int main(int argc, char **argv) {
         }
 
         // Update uniforms
-        glm_rotate(frameUbo.model, glm_rad(100.0f * delta), (float[3]){1.0f, 1.0f, 0.0f});
+        glm_rotate(frameUbo.model, glm_rad(100.0f * delta), (vec3){1.0f, 1.0f, 0.0f});
         SDL_PushGPUVertexUniformData(commandBuffer, 0, &frameUbo, sizeof(frameUbo));
 
         SDL_GPUTexture *swapchainTexture = NULL;
