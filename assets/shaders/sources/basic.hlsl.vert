@@ -1,17 +1,17 @@
+struct VSIn {
+    float3 position : POSITION;
+    float3 color : COLOR;
+};
+
 struct VSOut
 {
     float4 pos : SV_Position;
+    float4 color : COLOR;
 };
 
-VSOut main(uint vid : SV_VertexID)
-{
-    // Fullscreen triangle in NDC
-    float2 p;
-    if (vid == 0)      p = float2(-0.5, -0.5);
-    else if (vid == 1) p = float2( 0.5, -0.5);
-    else               p = float2(0.0,  0.5);
-
-    VSOut o;
-    o.pos = float4(p, 0.0, 1.0);
-    return o;
+VSOut main(VSIn input){
+    VSOut output;
+    output.pos = float4(input.position, 1.0);
+    output.color = float4(input.color, 1.0);
+    return output;
 }

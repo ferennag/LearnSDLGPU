@@ -5,22 +5,21 @@ using namespace metal;
 
 struct main0_out
 {
+    float4 out_var_COLOR [[user(locn0)]];
     float4 gl_Position [[position]];
 };
 
-vertex main0_out main0(uint gl_VertexIndex [[vertex_id]])
+struct main0_in
+{
+    float3 in_var_POSITION [[attribute(0)]];
+    float3 in_var_COLOR [[attribute(1)]];
+};
+
+vertex main0_out main0(main0_in in [[stage_in]])
 {
     main0_out out = {};
-    float2 _32;
-    if (gl_VertexIndex == 0u)
-    {
-        _32 = float2(-0.5);
-    }
-    else
-    {
-        _32 = select(float2(0.0, 0.5), float2(0.5, -0.5), bool2(gl_VertexIndex == 1u));
-    }
-    out.gl_Position = float4(_32, 0.0, 1.0);
+    out.gl_Position = float4(in.in_var_POSITION, 1.0);
+    out.out_var_COLOR = float4(in.in_var_COLOR, 1.0);
     return out;
 }
 

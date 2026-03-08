@@ -1,4 +1,8 @@
-float4 main() : SV_Target
+struct FSInput {
+    float4 color: COLOR;
+};
+
+float4 main(FSInput input) : SV_Target
 {
-    return float4(1.0, 1.0, 1.0, 1.0); // magenta
+    return input.color; 
 }

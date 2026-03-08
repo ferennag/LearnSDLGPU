@@ -1,5 +1,26 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <stddef.h>
+
+typedef struct Vertex {
+    float position[3];
+    float color[3];
+} Vertex;
+
+static Vertex vertices[] = {
+    {
+        .position = {-0.5f, -0.5f, 0.0f},
+        .color = {1.0f, 0.0f, 0.0f},
+    },
+    {
+        .position = {0.5f, -0.5f, 0.0f},
+        .color = {0.0f, 1.0f, 0.0f},
+    },
+    {
+        .position = {0.0f, 0.5f, 0.0f},
+        .color = {0.0f, 0.0f, 1.0f},
+    },
+};
 
 SDL_GPUShader *ShaderLoad(SDL_GPUDevice *device,
                           const char *name,
@@ -91,6 +112,45 @@ int main(int argc, char **argv) {
         return -5;
     }
 
+    SDL_GPUBufferCreateInfo bufferCreateInfo = {
+        .size = sizeof(vertices),
+        .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+    };
+
+    SDL_GPUBuffer *vertexBuffer = SDL_CreateGPUBuffer(device, &bufferCreateInfo);
+    SDL_GPUTransferBuffer *vertexTransferBuffer =
+        SDL_CreateGPUTransferBuffer(device,
+                                    &(SDL_GPUTransferBufferCreateInfo){
+                                        .size = sizeof(vertices),
+                                        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+                                    });
+
+    if (!vertexBuffer || !vertexTransferBuffer) {
+        SDL_Log("Failed create vertex buffer: %s", SDL_GetError());
+        return -6;
+    }
+
+    Vertex *transferData = SDL_MapGPUTransferBuffer(device, vertexTransferBuffer, false);
+    memcpy(transferData, vertices, sizeof(vertices));
+    SDL_UnmapGPUTransferBuffer(device, vertexTransferBuffer);
+
+    SDL_GPUCommandBuffer *copyBuffer = SDL_AcquireGPUCommandBuffer(device);
+    SDL_GPUCopyPass *copyPass = SDL_BeginGPUCopyPass(copyBuffer);
+    SDL_UploadToGPUBuffer(copyPass,
+                          &(SDL_GPUTransferBufferLocation){
+                              .transfer_buffer = vertexTransferBuffer,
+                              .offset = 0,
+                          },
+                          &(SDL_GPUBufferRegion){
+                              .buffer = vertexBuffer,
+                              .offset = 0,
+                              .size = sizeof(vertices),
+                          },
+                          false);
+    SDL_EndGPUCopyPass(copyPass);
+    SDL_SubmitGPUCommandBuffer(copyBuffer);
+    SDL_ReleaseGPUTransferBuffer(device, vertexTransferBuffer);
+
     SDL_GPUGraphicsPipelineCreateInfo graphicsPipelineCreateInfo = {
         .target_info =
             {
@@ -100,11 +160,48 @@ int main(int argc, char **argv) {
                 }},
             },
         .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+        .vertex_input_state =
+            {
+                .num_vertex_buffers = 1,
+                .vertex_buffer_descriptions =
+                    (SDL_GPUVertexBufferDescription[]){
+                        {
+                            .slot = 0,
+                            .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+                            .instance_step_rate = 0,
+                            .pitch = sizeof(Vertex),
+                        },
+                    },
+                .num_vertex_attributes = 2,
+                .vertex_attributes =
+                    (SDL_GPUVertexAttribute[]){
+                        {
+                            .buffer_slot = 0,
+                            .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+                            .location = 0,
+                            .offset = 0,
+                        },
+                        {
+                            .buffer_slot = 0,
+                            .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+                            .location = 1,
+                            .offset = offsetof(Vertex, color),
+                        },
+
+                    },
+            },
         .vertex_shader = basicVertexShader,
         .fragment_shader = basicFragmentShader,
+        .depth_stencil_state =
+            {
+                .enable_depth_test = true,
+                .compare_op = SDL_GPU_COMPAREOP_GREATER_OR_EQUAL,
+            },
         .rasterizer_state =
             {
                 .fill_mode = SDL_GPU_FILLMODE_FILL,
+                .cull_mode = SDL_GPU_CULLMODE_BACK,
+                .front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
             },
     };
 
@@ -113,6 +210,8 @@ int main(int argc, char **argv) {
         SDL_Log("Failed to create graphics pipeline: %s", SDL_GetError());
         return -6;
     }
+
+    SDL_SetGPUSwapchainParameters(device, window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_VSYNC);
 
     bool running = true;
     while (running) {
@@ -151,6 +250,7 @@ int main(int argc, char **argv) {
 
             SDL_GPURenderPass *pass = SDL_BeginGPURenderPass(commandBuffer, &color, 1, NULL);
             SDL_BindGPUGraphicsPipeline(pass, pipeline);
+            SDL_BindGPUVertexBuffers(pass, 0, &(SDL_GPUBufferBinding){.buffer = vertexBuffer, .offset = 0}, 1);
             SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
             SDL_EndGPURenderPass(pass);
         }
