@@ -1,0 +1,26 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct main0_out
+{
+    float4 gl_Position [[position]];
+};
+
+vertex main0_out main0(uint gl_VertexIndex [[vertex_id]])
+{
+    main0_out out = {};
+    float2 _32;
+    if (gl_VertexIndex == 0u)
+    {
+        _32 = float2(-0.5);
+    }
+    else
+    {
+        _32 = select(float2(0.0, 0.5), float2(0.5, -0.5), bool2(gl_VertexIndex == 1u));
+    }
+    out.gl_Position = float4(_32, 0.0, 1.0);
+    return out;
+}
+

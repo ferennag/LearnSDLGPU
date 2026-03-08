@@ -1,0 +1,30 @@
+ColumnLimit: 120
+IndentWidth: 4
+BasedOnStyle: LLVM
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+AllowShortLambdasOnASingleLine: None
+BinPackArguments: false
+BinPackParameters: false
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
+PenaltyBreakBeforeFirstCallParameter: 1000000
+IndentCaseLabels: true
+
+SortIncludes: true
+IncludeBlocks: Regroup
+
+IncludeCategories:
+  # Flux engine headers → angle brackets
+  - Regex: '^<flux/.*>'
+    Priority: 1
+
+  # System headers
+  - Regex: '^<.*>'
+    Priority: 2
+
+  # Everything else (local/private)
+  - Regex: '.*'
+    Priority: 3
