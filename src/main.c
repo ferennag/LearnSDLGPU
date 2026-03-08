@@ -4,22 +4,18 @@
 
 typedef struct Vertex {
     float position[3];
-    float color[3];
+    float normal[3];
 } Vertex;
 
 static Vertex vertices[] = {
-    {
-        .position = {-0.5f, -0.5f, 0.0f},
-        .color = {1.0f, 0.0f, 0.0f},
-    },
-    {
-        .position = {0.5f, -0.5f, 0.0f},
-        .color = {0.0f, 1.0f, 0.0f},
-    },
-    {
-        .position = {0.0f, 0.5f, 0.0f},
-        .color = {0.0f, 0.0f, 1.0f},
-    },
+    // Front face
+    {{-0.5f, -0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{0.5f, -0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+
+    {{-0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{0.5f, -0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
 };
 
 SDL_GPUShader *ShaderLoad(SDL_GPUDevice *device,
@@ -204,7 +200,7 @@ int main(int argc, char **argv) {
                             .buffer_slot = 0,
                             .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
                             .location = 1,
-                            .offset = offsetof(Vertex, color),
+                            .offset = offsetof(Vertex, normal),
                         },
 
                     },
@@ -277,7 +273,7 @@ int main(int argc, char **argv) {
             SDL_GPURenderPass *pass = SDL_BeginGPURenderPass(commandBuffer, &color, 1, NULL);
             SDL_BindGPUGraphicsPipeline(pass, pipeline);
             SDL_BindGPUVertexBuffers(pass, 0, &(SDL_GPUBufferBinding){.buffer = vertexBuffer, .offset = 0}, 1);
-            SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
+            SDL_DrawGPUPrimitives(pass, 6, 1, 0, 0);
             SDL_EndGPURenderPass(pass);
         }
         SDL_SubmitGPUCommandBuffer(commandBuffer);
