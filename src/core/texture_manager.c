@@ -103,50 +103,52 @@ bool TextureManager_UploadTexture(SDL_GPUCopyPass *copyPass, Texture *texture) {
         return true;
     }
 
-    if (texture->gpuTexture == NULL) {
-        SDL_GPUTextureCreateInfo createInfo = {0};
-        createInfo.type = SDL_GPU_TEXTURETYPE_2D;
-        createInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-        createInfo.width = texture->width;
-        createInfo.height = texture->height;
-        createInfo.layer_count_or_depth = 1;
-        createInfo.num_levels = 1;
-        createInfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
-        SDL_GPUTexture *gpuTexture = SDL_CreateGPUTexture(gTextureManager.device, &createInfo);
-        if (gpuTexture == NULL) {
-            SDL_Log("Failed to create GPU texture: %s", SDL_GetError());
-            return false;
-        }
-
-        texture->gpuTexture = gpuTexture;
-
-        SDL_GPUTransferBufferCreateInfo transferBufferCreateInfo = {0};
-        transferBufferCreateInfo.size = texture->width * texture->height;
-        transferBufferCreateInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-        SDL_GPUTransferBuffer *transferBuffer =
-            SDL_CreateGPUTransferBuffer(gTextureManager.device, &transferBufferCreateInfo);
-        if (!transferBuffer) {
-            SDL_Log("Failed to create GPU transfer buffer: %s", SDL_GetError());
-            return false;
-        }
-
-        unsigned char *transferData = SDL_MapGPUTransferBuffer(gTextureManager.device, transferBuffer, false);
-        memcpy(transferData, texture->pixels, texture->width * texture->height);
-        SDL_UnmapGPUTransferBuffer(gTextureManager.device, transferBuffer);
-
-        SDL_GPUTextureTransferInfo transferInfo = {0};
-        transferInfo.pixels_per_row = texture->width;
-        transferInfo.rows_per_layer = texture->height;
-        transferInfo.transfer_buffer = transferBuffer;
-        SDL_GPUTextureRegion destination = {0};
-        destination.texture = texture->gpuTexture;
-        destination.w = texture->width;
-        destination.h = texture->height;
-
-        SDL_UploadToGPUTexture(copyPass, &transferInfo, &destination, false);
-        SDL_ReleaseGPUTransferBuffer(gTextureManager.device, transferBuffer);
-        SDL_Log("Texture successfully uploaded");
+    if (texture->gpuTexture != NULL) {
+        return true;
     }
+
+    SDL_GPUTextureCreateInfo createInfo = {0};
+    createInfo.type = SDL_GPU_TEXTURETYPE_2D;
+    createInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    createInfo.width = texture->width;
+    createInfo.height = texture->height;
+    createInfo.layer_count_or_depth = 1;
+    createInfo.num_levels = 1;
+    createInfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    SDL_GPUTexture *gpuTexture = SDL_CreateGPUTexture(gTextureManager.device, &createInfo);
+    if (gpuTexture == NULL) {
+        SDL_Log("Failed to create GPU texture: %s", SDL_GetError());
+        return false;
+    }
+
+    texture->gpuTexture = gpuTexture;
+
+    SDL_GPUTransferBufferCreateInfo transferBufferCreateInfo = {0};
+    transferBufferCreateInfo.size = texture->width * texture->height;
+    transferBufferCreateInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    SDL_GPUTransferBuffer *transferBuffer =
+        SDL_CreateGPUTransferBuffer(gTextureManager.device, &transferBufferCreateInfo);
+    if (!transferBuffer) {
+        SDL_Log("Failed to create GPU transfer buffer: %s", SDL_GetError());
+        return false;
+    }
+
+    unsigned char *transferData = SDL_MapGPUTransferBuffer(gTextureManager.device, transferBuffer, false);
+    memcpy(transferData, texture->pixels, texture->width * texture->height);
+    SDL_UnmapGPUTransferBuffer(gTextureManager.device, transferBuffer);
+
+    SDL_GPUTextureTransferInfo transferInfo = {0};
+    transferInfo.pixels_per_row = texture->width;
+    transferInfo.rows_per_layer = texture->height;
+    transferInfo.transfer_buffer = transferBuffer;
+    SDL_GPUTextureRegion destination = {0};
+    destination.texture = texture->gpuTexture;
+    destination.w = texture->width;
+    destination.h = texture->height;
+
+    SDL_UploadToGPUTexture(copyPass, &transferInfo, &destination, false);
+    SDL_ReleaseGPUTransferBuffer(gTextureManager.device, transferBuffer);
+    SDL_Log("Texture successfully uploaded");
 
     return true;
 }
