@@ -4,6 +4,8 @@
 #include <cglm/mat4.h>
 #include <cglm/vec3.h>
 
+#include "core/texture_manager.h"
+
 typedef struct ModelVertex {
     vec3 position;
     vec3 normal;
@@ -24,10 +26,25 @@ typedef struct ModelMesh {
     mat4 transformation;
 } ModelMesh;
 
+typedef enum ModelMaterialType {
+    MATERIAL_PBR,
+} ModelMaterialType;
+
+typedef struct ModelMaterial {
+    ModelMaterialType type;
+
+    Texture *baseColor;
+    Texture *metallicRoughness;
+    Texture *normal;
+} ModelMaterial;
+
 typedef struct Model {
     unsigned int meshCapacity;
     unsigned int numMeshes;
     ModelMesh *meshes;
+
+    unsigned int numMaterials;
+    ModelMaterial *materials;
 } Model;
 
 typedef struct ModelMeshUbo {

@@ -137,6 +137,27 @@ void Model_ParseScenes(cgltf_data *data, Model *out) {
     }
 }
 
+void Model_ParseMaterials(cgltf_data *data, Model *out) {
+    out->materials = Memory_AllocateArray(data->materials_count, sizeof(ModelMaterial));
+    out->numMaterials = data->materials_count;
+
+    for (int m = 0; m < data->materials_count; ++m) {
+        ModelMaterial result = {0};
+        cgltf_material *material = &data->materials[m];
+
+        if (material->has_pbr_metallic_roughness) {
+            result.baseColor = TextureManager_LoadTexture(TEXTURE_TYPE_BASE_COLOR,
+                                                          &material->pbr_metallic_roughness.base_color_texture);
+            result.metallicRoughness =
+                TextureManager_LoadTexture(TEXTURE_TYPE_METALLIC_ROUGHNESS,
+                                           &material->pbr_metallic_roughness.metallic_roughness_texture);
+        }
+
+        result.normal = TextureManager_LoadTexture(TEXTURE_TYPE_NORMAL_MAP, &material->normal_texture);
+        out->materials[m] = result;
+    }
+}
+
 bool Model_Load(const char *name, Model **out) {
     char fullPath[255] = {0};
     // TODO: Need to support multiple file formats (.gltf, .obj, .glb, etc)
@@ -167,6 +188,7 @@ bool Model_Load(const char *name, Model **out) {
     result->meshCapacity = data->meshes_count;
     result->numMeshes = 0;
     Model_ParseScenes(data, result);
+    Model_ParseMaterials(data, result);
 
     *out = result;
     cgltf_free(data);
@@ -187,8 +209,10 @@ void Model_Destroy(Model *model, SDL_GPUDevice *device) {
         Memory_Free(model->meshes[i].vertices);
     }
 
-    if (model->meshes != NULL) {
-        Memory_Free(model->meshes);
+    Memory_Free(model->meshes);
+
+    if (model->materials != NULL) {
+        Memory_Free(model->materials);
     }
 
     Memory_Free(model);
@@ -282,6 +306,14 @@ bool Model_UploadToGPU(Model *model, SDL_GPUDevice *device) {
                               false);
         SDL_ReleaseGPUTransferBuffer(device, vertexTransferBuffer);
         SDL_ReleaseGPUTransferBuffer(device, indexTransferBuffer);
+    }
+
+    SDL_Log("Uploading textures");
+    for (int i = 0; i < model->numMaterials; ++i) {
+        ModelMaterial *material = &model->materials[i];
+        TextureManager_UploadTexture(copyPass, material->baseColor);
+        TextureManager_UploadTexture(copyPass, material->metallicRoughness);
+        TextureManager_UploadTexture(copyPass, material->normal);
     }
 
     SDL_EndGPUCopyPass(copyPass);
