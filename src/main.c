@@ -66,6 +66,8 @@ int main(int argc, char **argv) {
         .target_info =
             {
                 .num_color_targets = 1,
+                .has_depth_stencil_target = true,
+                .depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM,
                 .color_target_descriptions = (SDL_GPUColorTargetDescription[]){{
                     .format = SDL_GetGPUSwapchainTextureFormat(device, window),
                 }},
@@ -106,7 +108,8 @@ int main(int argc, char **argv) {
         .depth_stencil_state =
             {
                 .enable_depth_test = true,
-                .compare_op = SDL_GPU_COMPAREOP_GREATER_OR_EQUAL,
+                .enable_depth_write = true,
+                .compare_op = SDL_GPU_COMPAREOP_LESS,
             },
         .rasterizer_state =
             {
