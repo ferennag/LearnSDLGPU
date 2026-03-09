@@ -20,18 +20,18 @@ FetchContent_Declare(cglm
 )
 FetchContent_MakeAvailable(cglm)
 
-FetchContent_Declare(assimp
-    GIT_REPOSITORY https://github.com/assimp/assimp
-    GIT_TAG v6.0.4
+FetchContent_Declare(cgltf
+    GIT_REPOSITORY https://github.com/jkuhlmann/cgltf
+    GIT_TAG v1.15
 )
-FetchContent_MakeAvailable(assimp)
+FetchContent_MakeAvailable(cgltf)
 
 file(GLOB_RECURSE SOURCES src/*.c src/*.h)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wpedantic -g)
-target_include_directories(${PROJECT_NAME} PRIVATE src/ ${PROJECT_SOURCE_DIR}/lib/shadercross/include)
-target_link_libraries(${PROJECT_NAME} PRIVATE cglm SDL3::SDL3 ${PROJECT_SOURCE_DIR}/lib/shadercross/libSDL3_shadercross.a assimp)
+target_include_directories(${PROJECT_NAME} PRIVATE src/ lib/stb ${cgltf_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/lib/shadercross/include)
+target_link_libraries(${PROJECT_NAME} PRIVATE cglm SDL3::SDL3 ${PROJECT_SOURCE_DIR}/lib/shadercross/libSDL3_shadercross.a)
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets)

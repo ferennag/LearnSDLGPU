@@ -17,9 +17,19 @@ void *Memory_Allocate(size_t size) {
     return ptr;
 }
 
+void *Memory_Reallocate(void *ptr, size_t size) {
+    void *result = realloc(ptr, size);
+    return result;
+}
+
 void *Memory_AllocateArray(unsigned long count, size_t size) {
     void *ptr = calloc(count, size);
     return ptr;
+}
+
+void *Memory_ReallocateArray(void *ptr, unsigned long count, size_t size) {
+    void *result = realloc(ptr, count * size);
+    return result;
 }
 
 void Memory_Free(void *ptr) {

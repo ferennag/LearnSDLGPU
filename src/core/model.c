@@ -1,82 +1,175 @@
 #include "core/model.h"
 
 #include <SDL3/SDL.h>
-#include <assimp/cimport.h>
-#include <assimp/postprocess.h>
-#include <assimp/scene.h>
 #include <cglm/cglm.h>
+#define CGLTF_IMPLEMENTATION
+#include <cgltf.h>
 
 #include "core/memory.h"
+#include "core/texture_manager.h"
+
+void Model_ParseNode(cgltf_node *node, Model *out) {
+    if (node->mesh != NULL) {
+        ModelMesh modelMesh = {0};
+
+        cgltf_mesh *mesh = node->mesh;
+        SDL_Log("\t\tMesh: %s", mesh->name);
+
+        for (int p = 0; p < mesh->primitives_count; ++p) {
+            cgltf_primitive *primitive = &mesh->primitives[p];
+            if (primitive->type != cgltf_primitive_type_triangles) {
+                SDL_LogError(0, "Primitive type not supported: %d", primitive->type);
+                continue;
+            }
+
+            SDL_Log("\t\t\tPrimitive triangles: %d, attributes %zu, extensions %zu, targets %zu",
+                    p,
+                    primitive->attributes_count,
+                    primitive->extensions_count,
+                    primitive->targets_count);
+
+            if (primitive->indices) {
+                SDL_Log("\t\t\tPrimitive indices: %zu", primitive->indices->count);
+            }
+
+            cgltf_accessor *position = NULL;
+            cgltf_accessor *normal = NULL;
+            cgltf_accessor *tangent = NULL;
+            cgltf_accessor *texcoord = NULL;
+            cgltf_accessor *color = NULL;
+
+            for (int a = 0; a < primitive->attributes_count; ++a) {
+                cgltf_attribute *attribute = &primitive->attributes[a];
+                switch (attribute->type) {
+                    case cgltf_attribute_type_position:
+                        position = attribute->data;
+                        break;
+                    case cgltf_attribute_type_normal:
+                        normal = attribute->data;
+                        break;
+                    case cgltf_attribute_type_tangent:
+                        tangent = attribute->data;
+                        break;
+                    case cgltf_attribute_type_texcoord:
+                        texcoord = attribute->data;
+                        break;
+                    case cgltf_attribute_type_color:
+                        color = attribute->data;
+                        break;
+                    default:
+                        SDL_LogError(0, "Attribute type not supported: %d", attribute->type);
+                        break;
+                }
+            }
+
+            // We need at least positions
+            if (!position) {
+                SDL_LogError(0, "Position data required!");
+                continue;
+            }
+
+            modelMesh.numVertices = position->count;
+            SDL_Log("\t\t\tVertices: %zu", position->count);
+            ModelVertex *vertices = Memory_AllocateArray(position->count, sizeof(ModelVertex));
+            modelMesh.vertices = vertices;
+
+            for (int i = 0; i < position->count; ++i) {
+                cgltf_float tmp[3];
+                if (!cgltf_accessor_read_float(position, i, tmp, 3)) {
+                    break;
+                }
+
+                vertices[i].position[0] = tmp[0];
+                vertices[i].position[1] = tmp[1];
+                vertices[i].position[2] = tmp[2];
+
+                if (normal != NULL) {
+                    if (!cgltf_accessor_read_float(normal, i, tmp, 3)) {
+                        break;
+                    }
+
+                    vertices[i].normal[0] = tmp[0];
+                    vertices[i].normal[1] = tmp[1];
+                    vertices[i].normal[2] = tmp[2];
+                }
+            }
+
+            if (primitive->indices && primitive->indices->count > 0) {
+                modelMesh.numIndices = primitive->indices->count;
+                modelMesh.indices = Memory_AllocateArray(primitive->indices->count, sizeof(unsigned int));
+                cgltf_accessor_unpack_indices(primitive->indices,
+                                              modelMesh.indices,
+                                              sizeof(unsigned int),
+                                              primitive->indices->count);
+            }
+
+            cgltf_node_transform_world(node, (cgltf_float *)modelMesh.transformation);
+
+            SDL_Log("\t\t\tMesh successfully created!");
+            out->meshes[out->numMeshes++] = modelMesh;
+        }
+    }
+
+    if (node->children_count > 0) {
+        for (int c = 0; c < node->children_count; ++c) {
+            cgltf_node *child = node->children[c];
+            Model_ParseNode(child, out);
+        }
+    }
+}
+
+void Model_ParseScene(cgltf_scene *scene, Model *out) {
+    for (int n = 0; n < scene->nodes_count; ++n) {
+        cgltf_node *node = scene->nodes[n];
+        SDL_Log("\tNode %d: %s", n, node->name);
+        Model_ParseNode(node, out);
+    }
+}
+
+void Model_ParseScenes(cgltf_data *data, Model *out) {
+    SDL_Log("Buffers: %zu", data->buffers_count);
+
+    for (int s = 0; s < data->scenes_count; ++s) {
+        cgltf_scene scene = data->scenes[s];
+        SDL_Log("Scene %d: %s", s, scene.name);
+
+        Model_ParseScene(&scene, out);
+    }
+}
 
 bool Model_Load(const char *name, Model **out) {
     char fullPath[255] = {0};
     // TODO: Need to support multiple file formats (.gltf, .obj, .glb, etc)
     SDL_snprintf(fullPath, 255, "assets/models/%s/%s.glb", name, name);
 
-    // TODO: I am using aiProcess_PreTransformVertices here to transform all Meshes based on the transformations
-    // This is okay for now, but maybe not okay for future use.
-    // scene.mRootNode has the scene Graph with all the transformations.
-    const struct aiScene *scene = aiImportFile(fullPath,
-                                               aiProcess_Triangulate | aiProcess_GenNormals | aiProcess_SortByPType |
-                                                   aiProcess_ValidateDataStructure | aiProcess_PreTransformVertices);
-    if (scene == NULL) {
-        SDL_Log("Failed to load model %s from path %s", name, fullPath);
+    cgltf_options options = {0};
+    cgltf_data *data = NULL;
+    if (cgltf_parse_file(&options, fullPath, &data) != cgltf_result_success) {
+        SDL_Log("Failed to load model: %s", fullPath);
         return false;
     }
 
-    SDL_Log("Loaded model %s:", name);
-    SDL_Log("\t- number of meshes %d", scene->mNumMeshes);
-    SDL_Log("\t- number of materials %d", scene->mNumMaterials);
-    SDL_Log("\t- number of animations %d", scene->mNumAnimations);
-    SDL_Log("\t- number of cameras %d", scene->mNumCameras);
-    SDL_Log("\t- number of lights %d", scene->mNumLights);
-    SDL_Log("\t- number of textures %d", scene->mNumTextures);
-    SDL_Log("\t- number of skeletons %d", scene->mNumSkeletons);
-
-    Model *result = Memory_Allocate(sizeof(Model));
-    result->numMeshes = scene->mNumMeshes;
-    result->meshes = Memory_AllocateArray(scene->mNumMeshes, sizeof(ModelMesh));
-
-    size_t totalVertices = 0;
-    size_t totalIndices = 0;
-    for (int i = 0; i < scene->mNumMeshes; ++i) {
-        struct aiMesh *mesh = scene->mMeshes[i];
-        SDL_Log("\t- Mesh: '%s'", mesh->mName.data);
-        totalVertices += mesh->mNumVertices;
-
-        ModelMesh *modelMesh = &result->meshes[i];
-        modelMesh->numVertices = mesh->mNumVertices;
-        modelMesh->vertices = Memory_AllocateArray(mesh->mNumVertices, sizeof(ModelVertex));
-        modelMesh->numIndices = 0;
-        for (int v = 0; v < mesh->mNumVertices; ++v) {
-            modelMesh->vertices[v].position[0] = mesh->mVertices[v].x;
-            modelMesh->vertices[v].position[1] = mesh->mVertices[v].y;
-            modelMesh->vertices[v].position[2] = mesh->mVertices[v].z;
-
-            modelMesh->vertices[v].normal[0] = mesh->mNormals[v].x;
-            modelMesh->vertices[v].normal[1] = mesh->mNormals[v].y;
-            modelMesh->vertices[v].normal[2] = mesh->mNormals[v].z;
-        }
-
-        for (int f = 0; f < mesh->mNumFaces; ++f) {
-            modelMesh->numIndices += mesh->mFaces[f].mNumIndices;
-        }
-        totalIndices += modelMesh->numIndices;
-
-        modelMesh->indices = Memory_AllocateArray(modelMesh->numIndices, sizeof(unsigned int));
-        int index = 0;
-        for (int f = 0; f < mesh->mNumFaces; ++f) {
-            for (int i = 0; i < mesh->mFaces[f].mNumIndices; ++i) {
-                modelMesh->indices[index++] = mesh->mFaces[f].mIndices[i];
-            }
-        }
+    if (cgltf_validate(data) != cgltf_result_success) {
+        SDL_Log("CGLTF validation failed: %s", fullPath);
+        cgltf_free(data);
+        return false;
     }
 
-    SDL_Log("\t- number of vertices %zu", totalVertices);
-    SDL_Log("\t- number of indices %zu", totalIndices);
-    aiReleaseImport(scene);
+    if (cgltf_load_buffers(&options, data, fullPath) != cgltf_result_success) {
+        SDL_Log("CGLTF buffer loading failed: %s", fullPath);
+        cgltf_free(data);
+        return false;
+    }
+
+    SDL_Log("Loaded %s with %zu scenes", fullPath, data->scenes_count);
+    Model *result = Memory_Allocate(sizeof(Model));
+    result->meshes = Memory_AllocateArray(data->meshes_count, sizeof(ModelMesh));
+    result->meshCapacity = data->meshes_count;
+    result->numMeshes = 0;
+    Model_ParseScenes(data, result);
 
     *out = result;
+    cgltf_free(data);
     return true;
 }
 
@@ -94,7 +187,10 @@ void Model_Destroy(Model *model, SDL_GPUDevice *device) {
         Memory_Free(model->meshes[i].vertices);
     }
 
-    Memory_Free(model->meshes);
+    if (model->meshes != NULL) {
+        Memory_Free(model->meshes);
+    }
+
     Memory_Free(model);
 }
 
@@ -193,9 +289,13 @@ bool Model_UploadToGPU(Model *model, SDL_GPUDevice *device) {
     return true;
 }
 
-void Model_Render(Model *model, SDL_GPURenderPass *renderPass) {
+void Model_Render(Model *model, SDL_GPUCommandBuffer *commandBuffer, SDL_GPURenderPass *renderPass) {
     for (int i = 0; i < model->numMeshes; ++i) {
         ModelMesh *mesh = &model->meshes[i];
+        ModelMeshUbo meshUbo = {0};
+        glm_mat4_copy(mesh->transformation, meshUbo.meshTransform);
+
+        SDL_PushGPUVertexUniformData(commandBuffer, 1, &meshUbo, sizeof(meshUbo));
         SDL_BindGPUVertexBuffers(renderPass, 0, &(SDL_GPUBufferBinding){.buffer = mesh->vertexBuffer, .offset = 0}, 1);
         SDL_BindGPUIndexBuffer(renderPass,
                                &(SDL_GPUBufferBinding){.buffer = mesh->indexBuffer, .offset = 0},

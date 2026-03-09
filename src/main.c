@@ -6,6 +6,7 @@
 #include "core/memory.h"
 #include "core/model.h"
 #include "core/shader.h"
+#include "core/texture_manager.h"
 #include "core/util.h"
 
 // TODO: projection matrix should not be part of the frame UBO, no need to send it to the GPU every frame
@@ -47,6 +48,11 @@ int main(int argc, char **argv) {
         return -4;
     }
 
+    if (!TextureManager_Init(device)) {
+        SDL_Log("Failed to initialize texture manager!");
+        return -5;
+    }
+
     Model *car = NULL;
     if (!Model_Load("porsche2", &car)) {
         return -5;
@@ -56,7 +62,7 @@ int main(int argc, char **argv) {
         return -5;
     }
 
-    SDL_GPUShader *basicVertexShader = Shader_Load(device, "basic.vert", 0, 0, 1, 0);
+    SDL_GPUShader *basicVertexShader = Shader_Load(device, "basic.vert", 0, 0, 2, 0);
     SDL_GPUShader *basicFragmentShader = Shader_Load(device, "basic.frag", 0, 0, 0, 0);
     if (!basicVertexShader || !basicFragmentShader) {
         return -5;
@@ -198,7 +204,7 @@ int main(int argc, char **argv) {
             SDL_GPURenderPass *pass = SDL_BeginGPURenderPass(commandBuffer, &color, 1, NULL);
             SDL_BindGPUGraphicsPipeline(pass, pipeline);
 
-            Model_Render(car, pass);
+            Model_Render(car, commandBuffer, pass);
 
             SDL_EndGPURenderPass(pass);
         }
@@ -206,6 +212,7 @@ int main(int argc, char **argv) {
     }
 
     Model_Destroy(car, device);
+    TextureManager_Shutdown();
     SDL_ReleaseWindowFromGPUDevice(device, window);
     SDL_DestroyGPUDevice(device);
     SDL_Quit();
