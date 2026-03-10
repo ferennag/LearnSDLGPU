@@ -26,6 +26,7 @@ void Model_ParseNode(cgltf_data *data, cgltf_node *node, Model *out) {
 
             modelMesh.materialId = cgltf_material_index(data, primitive->material);
 
+            SDL_Log("\t\t\tPrimitive material: %d", modelMesh.materialId);
             SDL_Log("\t\t\tPrimitive triangles: %d, attributes %zu, extensions %zu, targets %zu",
                     p,
                     primitive->attributes_count,
@@ -152,10 +153,12 @@ void Model_ParseMaterials(cgltf_data *data, Model *out) {
     out->materials = Memory_AllocateArray(data->materials_count, sizeof(ModelMaterial));
     out->numMaterials = data->materials_count;
 
+    SDL_Log("Materials:");
     for (int m = 0; m < data->materials_count; ++m) {
         ModelMaterial result = {0};
         result.id = m;
         cgltf_material *material = &data->materials[m];
+        SDL_Log("\tMaterial %d: %s", m, material->name);
 
         if (material->has_pbr_metallic_roughness) {
             result.baseColor = TextureManager_LoadTexture(TEXTURE_TYPE_BASE_COLOR,
@@ -165,6 +168,17 @@ void Model_ParseMaterials(cgltf_data *data, Model *out) {
                                            &material->pbr_metallic_roughness.metallic_roughness_texture);
         }
 
+        if (material->has_pbr_specular_glossiness) {
+            result.specularGlossiness =
+                TextureManager_LoadTexture(TEXTURE_TYPE_SPECULAR_GLOSSINESS,
+                                           &material->pbr_specular_glossiness.specular_glossiness_texture);
+
+            result.diffuse =
+                TextureManager_LoadTexture(TEXTURE_TYPE_DIFFUSE, &material->pbr_specular_glossiness.diffuse_texture);
+        }
+
+        result.occlusion = TextureManager_LoadTexture(TEXTURE_TYPE_AMBIENT_OCCLUSION, &material->occlusion_texture);
+        result.emissive = TextureManager_LoadTexture(TEXTURE_TYPE_EMISSIVE, &material->emissive_texture);
         result.normal = TextureManager_LoadTexture(TEXTURE_TYPE_NORMAL_MAP, &material->normal_texture);
         out->materials[m] = result;
     }
@@ -331,6 +345,10 @@ bool Model_UploadToGPU(Model *model, SDL_GPUDevice *device) {
         ModelMaterial *material = &model->materials[i];
         TextureManager_UploadTexture(copyPass, material->baseColor);
         TextureManager_UploadTexture(copyPass, material->metallicRoughness);
+        TextureManager_UploadTexture(copyPass, material->specularGlossiness);
+        TextureManager_UploadTexture(copyPass, material->diffuse);
+        TextureManager_UploadTexture(copyPass, material->emissive);
+        TextureManager_UploadTexture(copyPass, material->occlusion);
         TextureManager_UploadTexture(copyPass, material->normal);
     }
 

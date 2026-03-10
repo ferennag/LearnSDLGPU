@@ -38,6 +38,10 @@ typedef struct ModelMaterial {
 
     Texture *baseColor;
     Texture *metallicRoughness;
+    Texture *specularGlossiness;
+    Texture *diffuse;
+    Texture *occlusion;
+    Texture *emissive;
     Texture *normal;
 } ModelMaterial;
 

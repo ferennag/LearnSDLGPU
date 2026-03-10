@@ -65,6 +65,8 @@ int main(int argc, char **argv) {
         return -2;
     }
 
+    SDL_SetHint(SDL_HINT_RENDER_GPU_DEBUG, "1");
+
     SDL_GPUDevice *device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_MSL, true, NULL);
     if (!device) {
         SDL_Log("Error creating GPU device: %s", SDL_GetError());

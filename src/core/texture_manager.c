@@ -83,13 +83,15 @@ Texture *TextureManager_LoadTexture(TextureType textureType, cgltf_texture_view 
         cgltf_buffer_view *bv = texureView->texture->image->buffer_view;
         const unsigned char *bytes = (unsigned char *)bv->buffer->data + bv->offset;
 
+        int requiredChannels = 4;
         int width, height, channels;
-        unsigned char *pixels = stbi_load_from_memory(bytes, bv->buffer->size, &width, &height, &channels, 4);
-        texture->pixels = Memory_AllocateArray(width * height, sizeof(unsigned char));
+        unsigned char *pixels =
+            stbi_load_from_memory(bytes, bv->buffer->size, &width, &height, &channels, requiredChannels);
+        texture->pixels = Memory_AllocateArray(width * height * requiredChannels, sizeof(unsigned char));
         texture->width = width;
         texture->height = height;
-        texture->channels = 4;
-        memcpy(texture->pixels, pixels, width * height);
+        texture->channels = requiredChannels;
+        memcpy(texture->pixels, pixels, width * height * requiredChannels);
         stbi_image_free(pixels);
         SDL_Log("Loading successful %s - %dx%dx%d",
                 texureView->texture->image->name,
@@ -139,7 +141,11 @@ bool TextureManager_UploadTexture(SDL_GPUCopyPass *copyPass, Texture *texture) {
     }
 
     unsigned char *transferData = SDL_MapGPUTransferBuffer(gTextureManager.device, transferBuffer, false);
-    memcpy(transferData, texture->pixels, texture->width * texture->height);
+    if (!transferData) {
+        SDL_Log("Failed to map transfer buffer for texture upload!");
+        return false;
+    }
+    memcpy(transferData, texture->pixels, texture->width * texture->height * texture->channels);
     SDL_UnmapGPUTransferBuffer(gTextureManager.device, transferBuffer);
 
     SDL_GPUTextureTransferInfo transferInfo = {0};
