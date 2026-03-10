@@ -16,6 +16,34 @@ typedef struct FrameUbo {
     mat4 model;
 } FrameUbo;
 
+SDL_GPUTexture *CreateRenderTargetTexture(SDL_GPUDevice *device, int sampleCount, int width, int height) {
+    SDL_GPUTextureCreateInfo createInfo = {0};
+    createInfo.type = SDL_GPU_TEXTURETYPE_2D;
+    createInfo.format = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+    createInfo.width = width;
+    createInfo.height = height;
+    createInfo.layer_count_or_depth = 1;
+    createInfo.num_levels = 1;
+    createInfo.sample_count = sampleCount;
+    createInfo.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+    SDL_GPUTexture *texture = SDL_CreateGPUTexture(device, &createInfo);
+    return texture;
+}
+
+SDL_GPUTexture *CreateDepthTexture(SDL_GPUDevice *device, int sampleCount, int width, int height) {
+    SDL_GPUTextureCreateInfo createInfo = {0};
+    createInfo.type = SDL_GPU_TEXTURETYPE_2D;
+    createInfo.format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
+    createInfo.width = width;
+    createInfo.height = height;
+    createInfo.layer_count_or_depth = 1;
+    createInfo.num_levels = 1;
+    createInfo.sample_count = sampleCount;
+    createInfo.usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
+    SDL_GPUTexture *texture = SDL_CreateGPUTexture(device, &createInfo);
+    return texture;
+}
+
 int main(int argc, char **argv) {
     if (!Memory_Init()) {
         SDL_Log("Failed to initialize memory subsystem!");
@@ -63,17 +91,20 @@ int main(int argc, char **argv) {
     }
 
     SDL_GPUShader *basicVertexShader = Shader_Load(device, "basic.vert", 0, 0, 2, 0);
-    SDL_GPUShader *basicFragmentShader = Shader_Load(device, "basic.frag", 0, 0, 0, 0);
+    SDL_GPUShader *basicFragmentShader = Shader_Load(device, "basic.frag", 1, 0, 0, 0);
     if (!basicVertexShader || !basicFragmentShader) {
         return -5;
     }
+
+    SDL_GPUTexture *colorTargetTexture = NULL;
+    SDL_GPUTexture *depthTexture = NULL;
 
     SDL_GPUGraphicsPipelineCreateInfo graphicsPipelineCreateInfo = {
         .target_info =
             {
                 .num_color_targets = 1,
                 .has_depth_stencil_target = true,
-                .depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM,
+                .depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT,
                 .color_target_descriptions = (SDL_GPUColorTargetDescription[]){{
                     .format = SDL_GetGPUSwapchainTextureFormat(device, window),
                 }},
@@ -91,7 +122,7 @@ int main(int argc, char **argv) {
                             .pitch = sizeof(ModelVertex),
                         },
                     },
-                .num_vertex_attributes = 2,
+                .num_vertex_attributes = 3,
                 .vertex_attributes =
                     (SDL_GPUVertexAttribute[]){
                         {
@@ -105,6 +136,12 @@ int main(int argc, char **argv) {
                             .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
                             .location = 1,
                             .offset = offsetof(ModelVertex, normal),
+                        },
+                        {
+                            .buffer_slot = 0,
+                            .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+                            .location = 2,
+                            .offset = offsetof(ModelVertex, texCoord),
                         },
 
                     },
@@ -135,6 +172,17 @@ int main(int argc, char **argv) {
     SDL_GPUGraphicsPipeline *pipeline = SDL_CreateGPUGraphicsPipeline(device, &graphicsPipelineCreateInfo);
     if (!pipeline) {
         SDL_Log("Failed to create graphics pipeline: %s", SDL_GetError());
+        return -6;
+    }
+
+    SDL_GPUSamplerCreateInfo samplerCreateInfo = {0};
+    samplerCreateInfo.mag_filter = SDL_GPU_FILTER_LINEAR;
+    samplerCreateInfo.min_filter = SDL_GPU_FILTER_LINEAR;
+    samplerCreateInfo.enable_anisotropy = true;
+    samplerCreateInfo.max_anisotropy = 8;
+    SDL_GPUSampler *sampler = SDL_CreateGPUSampler(device, &samplerCreateInfo);
+    if (!sampler) {
+        SDL_Log("Failed to create texture sampler: %s", SDL_GetError());
         return -6;
     }
 
@@ -194,17 +242,32 @@ int main(int argc, char **argv) {
         SDL_PushGPUVertexUniformData(commandBuffer, 0, &frameUbo, sizeof(frameUbo));
 
         SDL_GPUTexture *swapchainTexture = NULL;
-        if (SDL_WaitAndAcquireGPUSwapchainTexture(commandBuffer, window, &swapchainTexture, NULL, NULL)) {
+        unsigned int w, h;
+        if (SDL_WaitAndAcquireGPUSwapchainTexture(commandBuffer, window, &swapchainTexture, &w, &h)) {
+            if (!colorTargetTexture) {
+                colorTargetTexture =
+                    CreateRenderTargetTexture(device, GetHighestSupportedSampleCount(device, window), w, h);
+            }
+            if (!depthTexture) {
+                depthTexture = CreateDepthTexture(device, GetHighestSupportedSampleCount(device, window), w, h);
+            }
+
             SDL_GPUColorTargetInfo color = {0};
-            color.texture = swapchainTexture;
+            color.texture = colorTargetTexture;
             color.clear_color = (SDL_FColor){0.1f, 0.1, 0.2f};
             color.load_op = SDL_GPU_LOADOP_CLEAR;
-            color.store_op = SDL_GPU_STOREOP_STORE;
+            color.store_op = SDL_GPU_STOREOP_RESOLVE_AND_STORE;
+            color.resolve_texture = swapchainTexture;
 
-            SDL_GPURenderPass *pass = SDL_BeginGPURenderPass(commandBuffer, &color, 1, NULL);
+            SDL_GPUDepthStencilTargetInfo depth = {0};
+            depth.load_op = SDL_GPU_LOADOP_CLEAR;
+            depth.store_op = SDL_GPU_STOREOP_STORE;
+            depth.clear_depth = 1.0f;
+            depth.texture = depthTexture;
+
+            SDL_GPURenderPass *pass = SDL_BeginGPURenderPass(commandBuffer, &color, 1, &depth);
             SDL_BindGPUGraphicsPipeline(pass, pipeline);
-
-            Model_Render(car, commandBuffer, pass);
+            Model_Render(car, commandBuffer, pass, sampler);
 
             SDL_EndGPURenderPass(pass);
         }

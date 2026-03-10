@@ -9,6 +9,7 @@
 typedef struct ModelVertex {
     vec3 position;
     vec3 normal;
+    vec2 texCoord;
 } ModelVertex;
 
 typedef struct ModelMesh {
@@ -24,6 +25,7 @@ typedef struct ModelMesh {
     size_t indexBufferSize;
 
     mat4 transformation;
+    unsigned int materialId;
 } ModelMesh;
 
 typedef enum ModelMaterialType {
@@ -31,6 +33,7 @@ typedef enum ModelMaterialType {
 } ModelMaterialType;
 
 typedef struct ModelMaterial {
+    unsigned int id;
     ModelMaterialType type;
 
     Texture *baseColor;
@@ -57,4 +60,7 @@ void Model_Destroy(Model *model, SDL_GPUDevice *device);
 
 bool Model_UploadToGPU(Model *model, SDL_GPUDevice *device);
 
-void Model_Render(Model *model, SDL_GPUCommandBuffer *commandBuffer, SDL_GPURenderPass *renderPass);
+void Model_Render(Model *model,
+                  SDL_GPUCommandBuffer *commandBuffer,
+                  SDL_GPURenderPass *renderPass,
+                  SDL_GPUSampler *sampler);

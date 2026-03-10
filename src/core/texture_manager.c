@@ -13,12 +13,17 @@ typedef struct TextureManager {
     unsigned int numTextures;
     unsigned int texturesCapacity;
     Texture *textures;
+
+    SDL_GPUTexture *fallbackWhiteTexture;
 } TextureManager;
 
 static TextureManager gTextureManager;
 
+SDL_GPUTexture *TextureManager_CreateFallbackWhiteTexture(SDL_GPUDevice *device);
+
 bool TextureManager_Init(SDL_GPUDevice *device) {
     gTextureManager.device = device;
+    gTextureManager.fallbackWhiteTexture = TextureManager_CreateFallbackWhiteTexture(device);
     return true;
 }
 
@@ -124,7 +129,7 @@ bool TextureManager_UploadTexture(SDL_GPUCopyPass *copyPass, Texture *texture) {
     texture->gpuTexture = gpuTexture;
 
     SDL_GPUTransferBufferCreateInfo transferBufferCreateInfo = {0};
-    transferBufferCreateInfo.size = texture->width * texture->height;
+    transferBufferCreateInfo.size = texture->width * texture->height * texture->channels;
     transferBufferCreateInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
     SDL_GPUTransferBuffer *transferBuffer =
         SDL_CreateGPUTransferBuffer(gTextureManager.device, &transferBufferCreateInfo);
@@ -145,10 +150,94 @@ bool TextureManager_UploadTexture(SDL_GPUCopyPass *copyPass, Texture *texture) {
     destination.texture = texture->gpuTexture;
     destination.w = texture->width;
     destination.h = texture->height;
+    destination.d = 1;
 
     SDL_UploadToGPUTexture(copyPass, &transferInfo, &destination, false);
     SDL_ReleaseGPUTransferBuffer(gTextureManager.device, transferBuffer);
     SDL_Log("Texture successfully uploaded");
 
     return true;
+}
+
+SDL_GPUTexture *TextureManager_CreateFallbackWhiteTexture(SDL_GPUDevice *device) {
+    const Uint8 whitePixel[4] = {255, 255, 255, 255};
+
+    SDL_GPUTextureCreateInfo texInfo = {0};
+    texInfo.type = SDL_GPU_TEXTURETYPE_2D;
+    texInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    texInfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    texInfo.width = 1;
+    texInfo.height = 1;
+    texInfo.layer_count_or_depth = 1;
+    texInfo.num_levels = 1;
+    texInfo.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    texInfo.props = 0;
+
+    SDL_GPUTexture *texture = SDL_CreateGPUTexture(device, &texInfo);
+    if (!texture) {
+        SDL_Log("Failed to create fallback texture: %s", SDL_GetError());
+        return NULL;
+    }
+
+    SDL_GPUTransferBufferCreateInfo transferInfo = {0};
+    transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    transferInfo.size = sizeof(whitePixel);
+    transferInfo.props = 0;
+
+    SDL_GPUTransferBuffer *transfer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
+    if (!transfer) {
+        SDL_Log("Failed to create fallback transfer buffer: %s", SDL_GetError());
+        SDL_ReleaseGPUTexture(device, texture);
+        return NULL;
+    }
+
+    void *mapped = SDL_MapGPUTransferBuffer(device, transfer, false);
+    if (!mapped) {
+        SDL_Log("Failed to map fallback transfer buffer: %s", SDL_GetError());
+        SDL_ReleaseGPUTransferBuffer(device, transfer);
+        SDL_ReleaseGPUTexture(device, texture);
+        return NULL;
+    }
+
+    SDL_memcpy(mapped, whitePixel, sizeof(whitePixel));
+    SDL_UnmapGPUTransferBuffer(device, transfer);
+
+    SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer(device);
+    if (!cmd) {
+        SDL_Log("Failed to acquire command buffer: %s", SDL_GetError());
+        SDL_ReleaseGPUTransferBuffer(device, transfer);
+        SDL_ReleaseGPUTexture(device, texture);
+        return NULL;
+    }
+
+    SDL_GPUCopyPass *copyPass = SDL_BeginGPUCopyPass(cmd);
+
+    SDL_GPUTextureTransferInfo src = {0};
+    src.transfer_buffer = transfer;
+    src.offset = 0;
+    src.pixels_per_row = 0; // tightly packed
+    src.rows_per_layer = 0; // tightly packed
+
+    SDL_GPUTextureRegion dst = {0};
+    dst.texture = texture;
+    dst.mip_level = 0;
+    dst.layer = 0;
+    dst.x = 0;
+    dst.y = 0;
+    dst.z = 0;
+    dst.w = 1;
+    dst.h = 1;
+    dst.d = 1;
+
+    SDL_UploadToGPUTexture(copyPass, &src, &dst, false);
+    SDL_EndGPUCopyPass(copyPass);
+    SDL_SubmitGPUCommandBuffer(cmd);
+
+    SDL_ReleaseGPUTransferBuffer(device, transfer);
+
+    return texture;
+}
+
+SDL_GPUTexture *TextureManager_GetFallbackTexture() {
+    return gTextureManager.fallbackWhiteTexture;
 }

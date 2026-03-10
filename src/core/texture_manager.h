@@ -28,3 +28,5 @@ void TextureManager_Shutdown();
 Texture *TextureManager_LoadTexture(TextureType textureType, cgltf_texture_view *texureView);
 
 bool TextureManager_UploadTexture(SDL_GPUCopyPass *copyPass, Texture *texture);
+
+SDL_GPUTexture *TextureManager_GetFallbackTexture();

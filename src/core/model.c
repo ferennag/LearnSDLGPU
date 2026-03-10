@@ -8,19 +8,23 @@
 #include "core/memory.h"
 #include "core/texture_manager.h"
 
-void Model_ParseNode(cgltf_node *node, Model *out) {
+void Model_ParseNode(cgltf_data *data, cgltf_node *node, Model *out) {
     if (node->mesh != NULL) {
-        ModelMesh modelMesh = {0};
-
         cgltf_mesh *mesh = node->mesh;
         SDL_Log("\t\tMesh: %s", mesh->name);
 
+        // TODO: Currently this will only work for 1 primitive, if there is more there will be many problems
+        // MAybe we should create a separate mesh for each primitive.
         for (int p = 0; p < mesh->primitives_count; ++p) {
+            ModelMesh modelMesh = {0};
+
             cgltf_primitive *primitive = &mesh->primitives[p];
             if (primitive->type != cgltf_primitive_type_triangles) {
                 SDL_LogError(0, "Primitive type not supported: %d", primitive->type);
                 continue;
             }
+
+            modelMesh.materialId = cgltf_material_index(data, primitive->material);
 
             SDL_Log("\t\t\tPrimitive triangles: %d, attributes %zu, extensions %zu, targets %zu",
                     p,
@@ -92,6 +96,13 @@ void Model_ParseNode(cgltf_node *node, Model *out) {
                     vertices[i].normal[1] = tmp[1];
                     vertices[i].normal[2] = tmp[2];
                 }
+
+                if (texcoord != NULL) {
+                    if (!cgltf_accessor_read_float(texcoord, i, tmp, 2)) {
+                        vertices[i].texCoord[0] = tmp[0];
+                        vertices[i].texCoord[1] = tmp[1];
+                    }
+                }
             }
 
             if (primitive->indices && primitive->indices->count > 0) {
@@ -113,16 +124,16 @@ void Model_ParseNode(cgltf_node *node, Model *out) {
     if (node->children_count > 0) {
         for (int c = 0; c < node->children_count; ++c) {
             cgltf_node *child = node->children[c];
-            Model_ParseNode(child, out);
+            Model_ParseNode(data, child, out);
         }
     }
 }
 
-void Model_ParseScene(cgltf_scene *scene, Model *out) {
+void Model_ParseScene(cgltf_data *data, cgltf_scene *scene, Model *out) {
     for (int n = 0; n < scene->nodes_count; ++n) {
         cgltf_node *node = scene->nodes[n];
         SDL_Log("\tNode %d: %s", n, node->name);
-        Model_ParseNode(node, out);
+        Model_ParseNode(data, node, out);
     }
 }
 
@@ -133,7 +144,7 @@ void Model_ParseScenes(cgltf_data *data, Model *out) {
         cgltf_scene scene = data->scenes[s];
         SDL_Log("Scene %d: %s", s, scene.name);
 
-        Model_ParseScene(&scene, out);
+        Model_ParseScene(data, &scene, out);
     }
 }
 
@@ -143,6 +154,7 @@ void Model_ParseMaterials(cgltf_data *data, Model *out) {
 
     for (int m = 0; m < data->materials_count; ++m) {
         ModelMaterial result = {0};
+        result.id = m;
         cgltf_material *material = &data->materials[m];
 
         if (material->has_pbr_metallic_roughness) {
@@ -183,9 +195,15 @@ bool Model_Load(const char *name, Model **out) {
     }
 
     SDL_Log("Loaded %s with %zu scenes", fullPath, data->scenes_count);
+    // We will create a separate mesh for each primitive
+    int meshCount = 0;
+    for (int i = 0; i < data->meshes_count; ++i) {
+        meshCount += data->meshes[i].primitives_count;
+    }
+
     Model *result = Memory_Allocate(sizeof(Model));
-    result->meshes = Memory_AllocateArray(data->meshes_count, sizeof(ModelMesh));
-    result->meshCapacity = data->meshes_count;
+    result->meshes = Memory_AllocateArray(meshCount, sizeof(ModelMesh));
+    result->meshCapacity = meshCount;
     result->numMeshes = 0;
     Model_ParseScenes(data, result);
     Model_ParseMaterials(data, result);
@@ -321,7 +339,10 @@ bool Model_UploadToGPU(Model *model, SDL_GPUDevice *device) {
     return true;
 }
 
-void Model_Render(Model *model, SDL_GPUCommandBuffer *commandBuffer, SDL_GPURenderPass *renderPass) {
+void Model_Render(Model *model,
+                  SDL_GPUCommandBuffer *commandBuffer,
+                  SDL_GPURenderPass *renderPass,
+                  SDL_GPUSampler *sampler) {
     for (int i = 0; i < model->numMeshes; ++i) {
         ModelMesh *mesh = &model->meshes[i];
         ModelMeshUbo meshUbo = {0};
@@ -332,6 +353,20 @@ void Model_Render(Model *model, SDL_GPUCommandBuffer *commandBuffer, SDL_GPURend
         SDL_BindGPUIndexBuffer(renderPass,
                                &(SDL_GPUBufferBinding){.buffer = mesh->indexBuffer, .offset = 0},
                                SDL_GPU_INDEXELEMENTSIZE_32BIT);
+
+        if (model->materials[mesh->materialId].metallicRoughness != NULL) {
+            SDL_GPUTextureSamplerBinding samplerBindings[] = {
+                {.sampler = sampler, .texture = model->materials[mesh->materialId].metallicRoughness->gpuTexture},
+            };
+
+            SDL_BindGPUFragmentSamplers(renderPass, 0, samplerBindings, 1);
+        } else {
+            SDL_GPUTextureSamplerBinding samplerBindings[] = {
+                {.sampler = sampler, .texture = TextureManager_GetFallbackTexture()}};
+
+            SDL_BindGPUFragmentSamplers(renderPass, 0, samplerBindings, 1);
+        }
+
         SDL_DrawGPUIndexedPrimitives(renderPass, mesh->numIndices, 1, 0, 0, 0);
     }
 }

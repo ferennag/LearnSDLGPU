@@ -18,6 +18,7 @@ struct type_MeshUbo
 struct main0_out
 {
     float4 out_var_COLOR [[user(locn0)]];
+    float2 out_var_TEXCOORD [[user(locn1)]];
     float4 gl_Position [[position]];
 };
 
@@ -25,6 +26,7 @@ struct main0_in
 {
     float3 in_var_POSITION [[attribute(0)]];
     float3 in_var_NORMAL [[attribute(1)]];
+    float2 in_var_TEXCOORD [[attribute(2)]];
 };
 
 vertex main0_out main0(main0_in in [[stage_in]], constant type_FrameUbo& FrameUbo [[buffer(0)]], constant type_MeshUbo& MeshUbo [[buffer(1)]])
@@ -32,6 +34,7 @@ vertex main0_out main0(main0_in in [[stage_in]], constant type_FrameUbo& FrameUb
     main0_out out = {};
     out.gl_Position = FrameUbo.projection * (FrameUbo.view * (FrameUbo.model * (MeshUbo.meshTransform * float4(in.in_var_POSITION, 1.0))));
     out.out_var_COLOR = float4(in.in_var_NORMAL, 1.0);
+    out.out_var_TEXCOORD = in.in_var_TEXCOORD;
     return out;
 }
 
