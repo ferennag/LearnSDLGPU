@@ -14,6 +14,7 @@ typedef struct FrameUbo {
     mat4 projection;
     mat4 view;
     mat4 model;
+    vec3 cameraPosition;
 } FrameUbo;
 
 SDL_GPUTexture *CreateRenderTargetTexture(SDL_GPUDevice *device, int sampleCount, int width, int height) {
@@ -93,7 +94,7 @@ int main(int argc, char **argv) {
     }
 
     SDL_GPUShader *basicVertexShader = Shader_Load(device, "basic.vert", 0, 0, 2, 0);
-    SDL_GPUShader *basicFragmentShader = Shader_Load(device, "basic.frag", 1, 0, 0, 0);
+    SDL_GPUShader *basicFragmentShader = Shader_Load(device, "basic.frag", 7, 0, 1, 0);
     if (!basicVertexShader || !basicFragmentShader) {
         return -5;
     }
@@ -190,13 +191,15 @@ int main(int argc, char **argv) {
 
     SDL_SetGPUSwapchainParameters(device, window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_VSYNC);
 
-    FrameUbo frameUbo = {};
+    FrameUbo frameUbo = {0};
     int windowWidth, windowHeight;
     SDL_GetWindowSize(window, &windowWidth, &windowHeight);
     glm_perspective(glm_rad(75.0f), (float)windowWidth / (float)windowHeight, 0.1f, 1000.0f, frameUbo.projection);
     glm_mat4_identity(frameUbo.view);
     glm_mat4_identity(frameUbo.model);
-    glm_lookat((vec3){0.0f, 1.0f, 5.0f}, (vec3){0.0f, 0.0f, 0.0f}, (vec3){0.0f, 1.0f, 0.0f}, frameUbo.view);
+    vec3 cameraPosition = {0.0f, 1.0f, 5.0f};
+    glm_lookat(cameraPosition, (vec3){0.0f, 0.0f, 0.0f}, (vec3){0.0f, 1.0f, 0.0f}, frameUbo.view);
+    glm_vec3_copy(cameraPosition, frameUbo.cameraPosition);
 
     bool running = true;
     Uint64 previousFrame = SDL_GetTicks();

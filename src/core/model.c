@@ -166,6 +166,13 @@ void Model_ParseMaterials(cgltf_data *data, Model *out) {
             result.metallicRoughness =
                 TextureManager_LoadTexture(TEXTURE_TYPE_METALLIC_ROUGHNESS,
                                            &material->pbr_metallic_roughness.metallic_roughness_texture);
+
+            glm_vec4_copy(material->pbr_metallic_roughness.base_color_factor, result.baseColorFactor);
+            result.metallicFactor = material->pbr_metallic_roughness.metallic_factor;
+            result.roughnessFactor = material->pbr_metallic_roughness.roughness_factor;
+        } else {
+            result.baseColor = TextureManager_GetFallbackTexture();
+            result.metallicRoughness = TextureManager_GetFallbackTexture();
         }
 
         if (material->has_pbr_specular_glossiness) {
@@ -175,11 +182,22 @@ void Model_ParseMaterials(cgltf_data *data, Model *out) {
 
             result.diffuse =
                 TextureManager_LoadTexture(TEXTURE_TYPE_DIFFUSE, &material->pbr_specular_glossiness.diffuse_texture);
+            glm_vec4_copy(material->pbr_specular_glossiness.diffuse_factor, result.diffuseFactor);
+            glm_vec3_copy(material->pbr_specular_glossiness.specular_factor, result.specularFactor);
+            result.glossinessFactor = material->pbr_specular_glossiness.glossiness_factor;
+        } else {
+            result.specularGlossiness = TextureManager_GetFallbackTexture();
+            result.diffuse = TextureManager_GetFallbackTexture();
         }
 
         result.occlusion = TextureManager_LoadTexture(TEXTURE_TYPE_AMBIENT_OCCLUSION, &material->occlusion_texture);
         result.emissive = TextureManager_LoadTexture(TEXTURE_TYPE_EMISSIVE, &material->emissive_texture);
         result.normal = TextureManager_LoadTexture(TEXTURE_TYPE_NORMAL_MAP, &material->normal_texture);
+        if (material->has_emissive_strength) {
+            result.emissiveStrength = material->emissive_strength.emissive_strength;
+            glm_vec3_copy(material->emissive_factor, result.emissiveFactor);
+        }
+
         out->materials[m] = result;
     }
 }
@@ -364,26 +382,39 @@ void Model_Render(Model *model,
     for (int i = 0; i < model->numMeshes; ++i) {
         ModelMesh *mesh = &model->meshes[i];
         ModelMeshUbo meshUbo = {0};
+        ModelMaterial material = model->materials[mesh->materialId];
+        MaterialGPU materialUbo = {
+            .metallicFactor = material.metallicFactor,
+            .roughnessFactor = material.roughnessFactor,
+            .emissiveStrength = material.emissiveStrength,
+            .glossinessFactor = material.glossinessFactor,
+        };
+        glm_vec4_copy(material.baseColorFactor, materialUbo.baseColorFactor);
+        glm_vec3_copy(material.emissiveFactor, materialUbo.emissiveFactor);
+        glm_vec4_copy(material.diffuseFactor, materialUbo.diffuseFactor);
+        glm_vec4_copy(material.specularFactor, materialUbo.specularFactor);
+
         glm_mat4_copy(mesh->transformation, meshUbo.meshTransform);
 
         SDL_PushGPUVertexUniformData(commandBuffer, 1, &meshUbo, sizeof(meshUbo));
+        SDL_PushGPUFragmentUniformData(commandBuffer, 0, &materialUbo, sizeof(materialUbo));
+
         SDL_BindGPUVertexBuffers(renderPass, 0, &(SDL_GPUBufferBinding){.buffer = mesh->vertexBuffer, .offset = 0}, 1);
         SDL_BindGPUIndexBuffer(renderPass,
                                &(SDL_GPUBufferBinding){.buffer = mesh->indexBuffer, .offset = 0},
                                SDL_GPU_INDEXELEMENTSIZE_32BIT);
 
-        if (model->materials[mesh->materialId].metallicRoughness != NULL) {
-            SDL_GPUTextureSamplerBinding samplerBindings[] = {
-                {.sampler = sampler, .texture = model->materials[mesh->materialId].metallicRoughness->gpuTexture},
-            };
+        SDL_GPUTextureSamplerBinding samplerBindings[] = {
+            {.sampler = sampler, .texture = material.baseColor->gpuTexture},
+            {.sampler = sampler, .texture = material.metallicRoughness->gpuTexture},
+            {.sampler = sampler, .texture = material.specularGlossiness->gpuTexture},
+            {.sampler = sampler, .texture = material.normal->gpuTexture},
+            {.sampler = sampler, .texture = material.diffuse->gpuTexture},
+            {.sampler = sampler, .texture = material.occlusion->gpuTexture},
+            {.sampler = sampler, .texture = material.emissive->gpuTexture},
+        };
 
-            SDL_BindGPUFragmentSamplers(renderPass, 0, samplerBindings, 1);
-        } else {
-            SDL_GPUTextureSamplerBinding samplerBindings[] = {
-                {.sampler = sampler, .texture = TextureManager_GetFallbackTexture()}};
-
-            SDL_BindGPUFragmentSamplers(renderPass, 0, samplerBindings, 1);
-        }
+        SDL_BindGPUFragmentSamplers(renderPass, 0, samplerBindings, 7);
 
         SDL_DrawGPUIndexedPrimitives(renderPass, mesh->numIndices, 1, 0, 0, 0);
     }

@@ -11,6 +11,7 @@ typedef enum TextureType {
     TEXTURE_TYPE_SPECULAR_GLOSSINESS,
     TEXTURE_TYPE_AMBIENT_OCCLUSION,
     TEXTURE_TYPE_NORMAL_MAP,
+    TEXTURE_TYPE_FALLBACK,
     TEXTURE_TYPE_UNKNOWN,
 } TextureType;
 
@@ -30,4 +31,4 @@ Texture *TextureManager_LoadTexture(TextureType textureType, cgltf_texture_view 
 
 bool TextureManager_UploadTexture(SDL_GPUCopyPass *copyPass, Texture *texture);
 
-SDL_GPUTexture *TextureManager_GetFallbackTexture();
+Texture *TextureManager_GetFallbackTexture();

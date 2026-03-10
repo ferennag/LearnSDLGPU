@@ -14,12 +14,12 @@ typedef struct TextureManager {
     unsigned int texturesCapacity;
     Texture *textures;
 
-    SDL_GPUTexture *fallbackWhiteTexture;
+    Texture *fallbackWhiteTexture;
 } TextureManager;
 
 static TextureManager gTextureManager;
 
-SDL_GPUTexture *TextureManager_CreateFallbackWhiteTexture(SDL_GPUDevice *device);
+Texture *TextureManager_CreateFallbackWhiteTexture(SDL_GPUDevice *device);
 
 bool TextureManager_Init(SDL_GPUDevice *device) {
     gTextureManager.device = device;
@@ -63,6 +63,11 @@ void TextureManager_Shutdown() {
 
         Memory_Free(gTextureManager.textures);
     }
+
+    if (gTextureManager.fallbackWhiteTexture) {
+        SDL_ReleaseGPUTexture(gTextureManager.device, gTextureManager.fallbackWhiteTexture->gpuTexture);
+        Memory_Free(gTextureManager.fallbackWhiteTexture);
+    }
 }
 
 // TODO: Steps needed:
@@ -72,13 +77,13 @@ void TextureManager_Shutdown() {
 // 4. Store the textures in a cache, so we only need to create each texture once
 Texture *TextureManager_LoadTexture(TextureType textureType, cgltf_texture_view *texureView) {
     if (!texureView || !texureView->texture) {
-        return NULL;
+        return TextureManager_GetFallbackTexture();
     }
 
-    Texture *texture = Memory_Allocate(sizeof(Texture));
-    texture->type = textureType;
-
     if (texureView->texture->image->buffer_view != NULL) {
+        Texture *texture = Memory_Allocate(sizeof(Texture));
+        texture->type = textureType;
+
         SDL_Log("Loading embedded texture: %s", texureView->texture->image->name);
         cgltf_buffer_view *bv = texureView->texture->image->buffer_view;
         const unsigned char *bytes = (unsigned char *)bv->buffer->data + bv->offset;
@@ -98,11 +103,12 @@ Texture *TextureManager_LoadTexture(TextureType textureType, cgltf_texture_view 
                 texture->width,
                 texture->height,
                 texture->channels);
+        TextureManager_AddTexture(texture);
+
+        return texture;
+    } else {
+        return TextureManager_GetFallbackTexture();
     }
-
-    TextureManager_AddTexture(texture);
-
-    return texture;
 }
 
 bool TextureManager_UploadTexture(SDL_GPUCopyPass *copyPass, Texture *texture) {
@@ -165,7 +171,7 @@ bool TextureManager_UploadTexture(SDL_GPUCopyPass *copyPass, Texture *texture) {
     return true;
 }
 
-SDL_GPUTexture *TextureManager_CreateFallbackWhiteTexture(SDL_GPUDevice *device) {
+Texture *TextureManager_CreateFallbackWhiteTexture(SDL_GPUDevice *device) {
     const Uint8 whitePixel[4] = {255, 255, 255, 255};
 
     SDL_GPUTextureCreateInfo texInfo = {0};
@@ -241,9 +247,15 @@ SDL_GPUTexture *TextureManager_CreateFallbackWhiteTexture(SDL_GPUDevice *device)
 
     SDL_ReleaseGPUTransferBuffer(device, transfer);
 
-    return texture;
+    Texture *result = Memory_Allocate(sizeof(Texture));
+    result->gpuTexture = texture;
+    result->width = 1;
+    result->height = 1;
+    result->channels = 4;
+    result->type = TEXTURE_TYPE_FALLBACK;
+    return result;
 }
 
-SDL_GPUTexture *TextureManager_GetFallbackTexture() {
+Texture *TextureManager_GetFallbackTexture() {
     return gTextureManager.fallbackWhiteTexture;
 }

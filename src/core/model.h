@@ -38,12 +38,34 @@ typedef struct ModelMaterial {
 
     Texture *baseColor;
     Texture *metallicRoughness;
+    vec4 baseColorFactor;
+    float metallicFactor;
+    float roughnessFactor;
+
     Texture *specularGlossiness;
+    vec4 diffuseFactor;
+    vec4 specularFactor;
+    float glossinessFactor;
+
+    Texture *normal;
     Texture *diffuse;
     Texture *occlusion;
     Texture *emissive;
-    Texture *normal;
+    vec3 emissiveFactor;
+    float emissiveStrength;
 } ModelMaterial;
+
+typedef struct MaterialGPU {
+    vec4 baseColorFactor;
+    vec4 diffuseFactor;
+    vec4 specularFactor;
+    vec3 emissiveFactor;
+    float emissiveStrength;
+    float metallicFactor;
+    float roughnessFactor;
+    float glossinessFactor;
+    float _pad0;
+} MaterialGPU;
 
 typedef struct Model {
     unsigned int meshCapacity;
