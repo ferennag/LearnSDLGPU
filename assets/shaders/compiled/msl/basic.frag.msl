@@ -35,17 +35,18 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_Material& Mater
     float3 _74 = fast::normalize(in.in_var_TEXCOORD1 - in.in_var_TEXCOORD2.xyz);
     float3 _75 = fast::normalize(float3(0.0, 5.0, 1.0));
     float3 _77 = fast::normalize(_74 + _75);
-    float _92 = Material.roughnessFactor * MetallicRoughness.sample(MetallicRoughnessSampler, in.in_var_TEXCOORD).y;
-    float3 _99 = (Material.baseColorFactor * BaseColor.sample(BaseColorSampler, in.in_var_TEXCOORD)).xyz;
-    float3 _101 = mix(float3(0.039999999105930328369140625), _99, float3(Material.metallicFactor * MetallicRoughness.sample(MetallicRoughnessSampler, in.in_var_TEXCOORD).z));
-    float3 _108 = _101 + ((float3(1.0) - _101) * powr(1.0 - precise::max(dot(_74, _77), 0.0), 5.0));
-    float _111 = powr(_92, 2.0);
-    float _123 = precise::max(dot(_71, _74), 0.0);
-    float _124 = _92 * 0.5;
-    float _125 = 1.0 - _124;
-    float _131 = precise::max(dot(_71, _75), 0.0);
-    float _143 = precise::max(dot(_75, _71), 0.0);
-    out.out_var_SV_Target = (Emissive.sample(EmissiveSampler, in.in_var_TEXCOORD) * float4(Material.emissiveFactor[0], Material.emissiveFactor[1], Material.emissiveFactor[2], 1.0)) + ((float4(((float3(1.0) - _108) * (_99 * float3(0.3183098733425140380859375))) + ((_108 * ((_111 / precise::max(3.1415927410125732421875 * powr((powr(precise::max(dot(_71, _77), 0.0), 2.0) * (_111 - 1.0)) + 1.0, 2.0), 9.9999999747524270787835121154785e-07)) * ((_123 / precise::max((_123 * _125) + _124, 9.9999999747524270787835121154785e-07)) * (_131 / precise::max((_131 * _125) + _124, 9.9999999747524270787835121154785e-07))))) / precise::max(float3((4.0 * precise::max(dot(_74, _71), 0.0)) * _143), float3(1.0000000116860974230803549289703e-07))), 1.0) * float4(8.0)) * _143);
+    float4 _84 = Material.baseColorFactor * BaseColor.sample(BaseColorSampler, in.in_var_TEXCOORD);
+    float _93 = Material.roughnessFactor * MetallicRoughness.sample(MetallicRoughnessSampler, in.in_var_TEXCOORD).y;
+    float3 _100 = _84.xyz;
+    float3 _102 = mix(float3(0.039999999105930328369140625), _100, float3(Material.metallicFactor * MetallicRoughness.sample(MetallicRoughnessSampler, in.in_var_TEXCOORD).z));
+    float3 _109 = _102 + ((float3(1.0) - _102) * powr(1.0 - precise::max(dot(_74, _77), 0.0), 5.0));
+    float _112 = powr(_93, 2.0);
+    float _124 = precise::max(dot(_71, _74), 0.0);
+    float _125 = _93 * 0.5;
+    float _126 = 1.0 - _125;
+    float _132 = precise::max(dot(_71, _75), 0.0);
+    float _144 = precise::max(dot(_75, _71), 0.0);
+    out.out_var_SV_Target = float4((Emissive.sample(EmissiveSampler, in.in_var_TEXCOORD).xyz * float3(Material.emissiveFactor)) + (((((float3(1.0) - _109) * (_100 * float3(0.3183098733425140380859375))) + ((_109 * ((_112 / precise::max(3.1415927410125732421875 * powr((powr(precise::max(dot(_71, _77), 0.0), 2.0) * (_112 - 1.0)) + 1.0, 2.0), 9.9999999747524270787835121154785e-07)) * ((_124 / precise::max((_124 * _126) + _125, 9.9999999747524270787835121154785e-07)) * (_132 / precise::max((_132 * _126) + _125, 9.9999999747524270787835121154785e-07))))) / precise::max(float3((4.0 * precise::max(dot(_74, _71), 0.0)) * _144), float3(1.0000000116860974230803549289703e-07)))) * float3(8.0)) * _144), _84.w);
     return out;
 }
 

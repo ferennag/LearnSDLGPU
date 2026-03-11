@@ -69,12 +69,13 @@ float3 F(float3 F0, float3 V, float3 H) {
 
 float4 main(FSInput input) : SV_Target {
     float lightIntensity = 8;
-    float4 lightColor = float4(1.0,1.0,1.0,1.0) * lightIntensity;
+    float3 lightColor = float3(1.0,1.0,1.0) * lightIntensity;
     float3 N = normalize(input.worldNormal);
     float3 V = normalize(input.cameraPosition - input.worldPosition.xyz);
     float3 L = normalize(float3(0.0, 5.0, 1.0));
     float3 H = normalize(V + L);
     float4 baseColor = baseColorFactor * BaseColor.Sample(BaseColorSampler, input.texCoord);
+    float alpha = baseColor.a;
     float roughness = roughnessFactor * MetallicRoughness.Sample(MetallicRoughnessSampler, input.texCoord).g;
     float metallic = metallicFactor * MetallicRoughness.Sample(MetallicRoughnessSampler, input.texCoord).b;
 
@@ -92,7 +93,7 @@ float4 main(FSInput input) : SV_Target {
 
     float3 BRDF = Kd * lambert + cookTorrance;
 
-    float4 emissive = Emissive.Sample(EmissiveSampler, input.texCoord) * float4(emissiveFactor, 1.0);
-    float4 output = emissive + float4(BRDF, 1.0) * lightColor * max(dot(L, N), 0.0); 
-    return output;
+    float3 emissive = Emissive.Sample(EmissiveSampler, input.texCoord).rgb * emissiveFactor;
+    float3 output = emissive + BRDF * lightColor * max(dot(L, N), 0.0); 
+    return float4(output, alpha);
 }

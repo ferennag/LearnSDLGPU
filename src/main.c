@@ -110,6 +110,16 @@ int main(int argc, char **argv) {
                 .depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT,
                 .color_target_descriptions = (SDL_GPUColorTargetDescription[]){{
                     .format = SDL_GetGPUSwapchainTextureFormat(device, window),
+                    .blend_state =
+                        {
+                            .enable_blend = true,
+                            .src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+                            .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                            .color_blend_op = SDL_GPU_BLENDOP_ADD,
+                            .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
+                            .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                            .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
+                        },
                 }},
             },
         .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
