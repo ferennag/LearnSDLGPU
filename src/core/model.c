@@ -100,9 +100,10 @@ void Model_ParseNode(cgltf_data *data, cgltf_node *node, Model *out) {
 
                 if (texcoord != NULL) {
                     if (!cgltf_accessor_read_float(texcoord, i, tmp, 2)) {
-                        vertices[i].texCoord[0] = tmp[0];
-                        vertices[i].texCoord[1] = tmp[1];
+                        break;
                     }
+                    vertices[i].texCoord[0] = tmp[0];
+                    vertices[i].texCoord[1] = tmp[1];
                 }
             }
 
