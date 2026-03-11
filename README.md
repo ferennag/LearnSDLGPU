@@ -1,9 +1,15 @@
 # Resources
 
-- Programming vehicles in video games: https://wassimulator.com/blog/programming/programming_vehicles_in_games.html and https://www.youtube.com/watch?v=MrIAw980iYg
-- Racing game physics: http://autoxer.skiblack.com/phys_racing/contents.htm
+## Graphics
+
 - GLTF Guide: https://www.khronos.org/files/gltf20-reference-guide.pdf
 - Rendering engine architecture: https://docs.vulkan.org/tutorial/latest/Building_a_Simple_Engine/Engine_Architecture/01_introduction.html
+
+## Physics
+
+- Programming vehicles in video games: https://wassimulator.com/blog/programming/programming_vehicles_in_games.html and https://www.youtube.com/watch?v=MrIAw980iYg
+- Racing game physics: http://autoxer.skiblack.com/phys_racing/contents.htm
+- Building a physics engine: https://www.youtube.com/watch?v=TtgS-b191V0
 
 # TODO
 
